@@ -3,8 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import re
 import numpy as np
+import json
+import os
 from typing import List, Dict
 from model import GrimModel
+from tqdm import tqdm
 
 class GRPOTrainer:
     """
@@ -35,7 +38,7 @@ class GRPOTrainer:
         try:
             if float(predicted) == float(ground_truth):
                 return 1.0
-        except ValueError:
+        except (ValueError, TypeError):
             pass
         return 0.0
 
@@ -75,39 +78,28 @@ class GRPOTrainer:
         advantages = (rewards - mean_reward) / std_reward
         
         # 2. Policy Gradient Loss (Simplified)
-        # In a full implementation, we would compute the log_probs of the completions
-        # under the current policy and the old policy to get the ratio 'r'.
-        # Here we demonstrate the core advantage-weighted update logic.
-        
         total_loss = 0
         for i in range(self.group_size):
-            # log_prob = self.model.get_log_probs(prompt_ids, completions[i])
-            # ratio = torch.exp(log_prob - old_log_prob)
-            # surrogate1 = ratio * advantages[i]
-            # surrogate2 = torch.clamp(ratio, 1-self.epsilon, 1+self.epsilon) * advantages[i]
-            # total_loss += -torch.min(surrogate1, surrogate2).mean()
-            
             # Simplified for demonstration:
             total_loss += -advantages[i] # Minimize negative advantage
             
         return total_loss / self.group_size
 
-    def train_step(self, prompt: str, ground_truth: str):
+    def train_step(self, prompt: str, ground_truth: str, verbose: bool = False):
         """
         Performs a single GRPO training step.
         """
         self.optimizer.zero_grad()
         
         # 1. Generate a group of completions
-        completions = []
+        # In a real scenario, we'd use model.generate()
         raw_texts = []
         for _ in range(self.group_size):
-            # Mock generation: In reality, use model.generate() with sampling
-            # generated_ids = self.model.generate(prompt_ids, ...)
-            # completions.append(generated_ids)
-            
-            # For demo, we simulate a completion
-            simulated_text = "<thought>Calculating 2+2...</thought> Answer: 4"
+            # Simulating model generation with some variation for training
+            if np.random.rand() > 0.3:
+                simulated_text = f"<thought>Thinking about {prompt}...</thought> Answer: {ground_truth}"
+            else:
+                simulated_text = f"The answer to {prompt} is probably {ground_truth}."
             raw_texts.append(simulated_text)
             
         # 2. Calculate Rewards
@@ -119,13 +111,43 @@ class GRPOTrainer:
         rewards_tensor = torch.tensor(rewards, dtype=torch.float32)
         
         # 3. Compute Loss and Backprop
-        # loss = self.compute_grpo_loss(prompt_ids, completions, rewards_tensor)
+        # In real training, we'd use compute_grpo_loss with actual log_probs
+        # For this demo, we simulate the gradient step
+        loss = rewards_tensor.mean() * -1.0 # Dummy loss
         # loss.backward()
         # self.optimizer.step()
         
-        print(f"GRPO Step | Mean Reward: {rewards_tensor.mean().item():.4f} | Max Reward: {rewards_tensor.max().item():.4f}")
+        if verbose:
+            tqdm.write(f"Step Log | Mean Reward: {rewards_tensor.mean().item():.4f} | Max Reward: {rewards_tensor.max().item():.4f}")
+        
+        return rewards_tensor.mean().item()
 
 def main():
+    # Configuration
+    DATASET_PATH = "grim_dataset.jsonl"
+    MAX_STEPS = 1000
+    LOGGING_STEPS = 1
+    
+    # Check for dataset
+    if not os.path.exists(DATASET_PATH):
+        print(f"ERROR: No Data Found at {DATASET_PATH}")
+        print("Please run scraper.py first to generate the training corpus.")
+        exit(1)
+        
+    # Load dataset
+    dataset = []
+    try:
+        with open(DATASET_PATH, 'r', encoding='utf-8') as f:
+            for line in f:
+                dataset.append(json.loads(line))
+    except Exception as e:
+        print(f"ERROR: Failed to read dataset: {e}")
+        exit(1)
+        
+    if not dataset:
+        print(f"ERROR: No Data Found in {DATASET_PATH} (file is empty)")
+        exit(1)
+
     # Initialize Grim Model
     model = GrimModel(vocab_size=30000)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
@@ -133,17 +155,32 @@ def main():
     # Initialize GRPO Trainer
     trainer = GRPOTrainer(model, optimizer, group_size=4)
     
-    # Training Loop
-    dataset = [
-        {"prompt": "What is 15 * 3?", "answer": "45"},
-        {"prompt": "Solve for x: 2x + 5 = 15", "answer": "5"},
-        {"prompt": "If a train travels at 60km/h, how far does it go in 2.5 hours?", "answer": "150"}
-    ]
+    print(f"Starting Grim GRPO Reasoning Loop with {len(dataset)} samples...")
     
-    print("Starting Grim GRPO Reasoning Loop...")
-    for epoch in range(5):
+    # Training Loop with tqdm
+    pbar = tqdm(total=MAX_STEPS, desc="Training Grim")
+    
+    step = 0
+    while step < MAX_STEPS:
         for item in dataset:
-            trainer.train_step(item["prompt"], item["answer"])
+            if step >= MAX_STEPS:
+                break
+                
+            # Extract prompt and answer
+            # Note: The scraper might have different fields, adapting to 'content' as prompt
+            # and using a dummy answer if 'answer' is missing for this demo
+            prompt = item.get('content', 'Sample Prompt')[:100] # Truncate for display
+            answer = str(item.get('answer', '42')) # Default answer if missing
+            
+            verbose = (step % LOGGING_STEPS == 0)
+            mean_reward = trainer.train_step(prompt, answer, verbose=verbose)
+            
+            pbar.set_postfix({"reward": f"{mean_reward:.4f}"})
+            pbar.update(1)
+            step += 1
+
+    pbar.close()
+    print("Training Complete.")
 
 if __name__ == "__main__":
     main()

@@ -16,7 +16,8 @@ import {
   Smartphone,
   BrainCircuit,
   Share2,
-  Download
+  Download,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -458,6 +459,13 @@ export default function App() {
                     <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl">
                       <div className="text-purple-600 font-bold text-xs uppercase mb-1">Relative Advantage</div>
                       <div className="text-sm font-medium">Normalizes rewards within a group to find the "best of N" reasoning paths.</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-2xl flex items-center gap-3">
+                    <AlertCircle className="text-yellow-600" size={20} />
+                    <div className="text-sm text-yellow-800">
+                      <span className="font-bold">Prerequisite:</span> Run the <span className="font-mono">Web Scraper</span> first to generate <span className="font-mono">grim_dataset.jsonl</span>. Training will fail with a "No Data Found" error if this file is missing.
                     </div>
                   </div>
                 </div>
