@@ -1,0 +1,5 @@
+{
+  "name": "Grim: Mobile MoE LLM Lab",
+  "description": "A comprehensive dashboard and codebase for building a mobile-first Mixture of Experts LLM with GRPO reasoning.",
+  "requestFramePermissions": []
+}
